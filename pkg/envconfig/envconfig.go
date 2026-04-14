@@ -14,10 +14,16 @@ import (
 type EnvConfig struct {
 	Port                       int      `envconfig:"PORT" required:"true"`
 	KMSKeys                    []string `envconfig:"KMS_KEYS" required:"false"`
-	AppIDs                     []int64  `envconfig:"GITHUB_APP_IDS" required:"true"`
+	AppIDs                     []int64  `envconfig:"GITHUB_APP_IDS" required:"false"`
 	AppSecretCertificateFile   string   `envconfig:"APP_SECRET_CERTIFICATE_FILE" required:"false"`
 	AppSecretCertificateEnvVar string   `envconfig:"APP_SECRET_CERTIFICATE_ENV_VAR" required:"false"`
 	Metrics                    bool     `envconfig:"METRICS" required:"false" default:"true"`
+
+	// AppConfigFile, when set, points to a YAML file describing per-org GitHub
+	// App pools. When set, the legacy GITHUB_APP_IDS / KMS_KEYS env vars are
+	// not required.
+	AppConfigFile string `envconfig:"APP_CONFIG_FILE" required:"false"`
+
 	// QuotaFloorHard / QuotaFloorSoft tune the three-tier capacity-aware
 	// picker in pkg/ghinstall. Defaults target GitHub's default 15,000/hr
 	// installation rate-limit cap: drop out of the preferred pool below
@@ -74,6 +80,15 @@ func BaseConfig() (*EnvConfig, error) {
 	var err error
 	if err = envconfig.Process("", cfg); err != nil {
 		return nil, err
+	}
+
+	// When using YAML config, the legacy env-var fields are not required.
+	if cfg.AppConfigFile != "" {
+		return cfg, nil
+	}
+
+	if len(cfg.AppIDs) == 0 {
+		return nil, errors.New("GITHUB_APP_IDS is required when APP_CONFIG_FILE is not set")
 	}
 
 	sources := 0
